@@ -31,10 +31,59 @@ def binaryImageToGraph(npArray):
     return g, cycles
 
 
+from functools import wraps
+
+def counter(func):
+    @wraps(func)
+    def tmp(*args, **kwargs):
+        tmp.count += 1
+        return func(*args, **kwargs)
+    tmp.count = 0
+    return tmp
+
+@counter
+def floodfill(matrix, x, y):
+    if matrix[x][y] == "1":
+        # recursively invoke flood fill on all surrounding cells:
+        if x > 0:
+            floodfill(matrix, x - 1, y)
+        if x < len(matrix[y]) - 1:
+            floodfill(matrix, x + 1, y)
+        if y > 0:
+            floodfill(matrix, x, y - 1)
+        if y < len(matrix) - 1:
+            floodfill(matrix, x, y + 1)
+    return matrix, floodfill.count
+
+
+def counter(func):
+    @wraps(func)
+    def tmp(*args, **kwargs):
+        tmp.count += 1
+        return func(*args, **kwargs)
+    tmp.count = 0
+    return tmp
+
+fillimgMat = np.zeros((3,3), dtype = np.uint8)
+
+@counter
+def floodfill(matrix, x, y):
+    if matrix[x][y] == "1":
+        matrix[x][y] = 2
+        # recursively invoke flood fill on all surrounding cells:
+        if x >= 0 and x <= len(matrix[y]) - 1:
+            floodfill(matrix, x + 1, y)
+            print(matrix)
+        if y >= 0 and y <= len(matrix[y]) - 1:
+            floodfill(matrix, x, y + 1)
+            print(matrix)
+    return matrix
+
+
 def floodfill(matrix, x, y):
     #"hidden" stop clause - not reinvoking for "c" or "b", only for "a".
-    if matrix[x][y] == "1":  
-        matrix[x][y] = "0" 
+    if matrix[x][y] == 1:  
+        matrix[x][y] = 2 
         #recursively invoke flood fill on all surrounding cells:
         if x > 0:
             floodfill(matrix,x-1,y)
@@ -44,3 +93,4 @@ def floodfill(matrix, x, y):
             floodfill(matrix,x,y-1)
         if y < len(matrix) - 1:
             floodfill(matrix,x,y+1)
+    return matrix
