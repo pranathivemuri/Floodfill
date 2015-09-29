@@ -3,7 +3,14 @@ import itertools
 import scipy.ndimage
 import time
 
-# see how label works here http://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.measurements.label.html
+"""
+filtering templates based on distances, number of objects 
+and other trials at floodfilling which did not succeed as much
+counter to count number of times a function is called is done
+using a decorator and is in this program for reference
+
+args and kwargs importance - http://stackoverflow.com/questions/3394835/args-and-kwargs
+"""
 
 
 def getAllnBitNumbers(n):
@@ -13,6 +20,30 @@ def getAllnBitNumbers(n):
     # All possible binary configurations
     b = [p for p in itertools.product(x, repeat=n)]
     return b
+
+# def bwHitMiss(im,s):
+#     s1 = sum(sum(sum(np.logical_xor(im,s))))
+#     return s1
+
+# def delCenterPixel(im):
+#     assert np.shape(im) == (3, 3, 3)
+#     assert np.ndim(im) == 3
+#     b2 = 1
+#     for i in range(1,len(selems)):
+#         b1 = bwHitMiss(im, selems[i])
+#         x2 = np.logical_and(b1, b2)
+#         b2 = b1
+#     return x2
+
+
+# def filterFloodFilltemps(inputIma, inputImb, se):
+#     l, obefore = scipy.ndimage.measurements.label(inputImb, se)
+#     l, oafter = scipy.ndimage.measurements.label(inputIma, se)
+#     if obefore == oafter:
+#         valOrNot = True
+#     else:
+#         valOrNot = False
+#     return valOrNot
 
 
 # def floodFillShortcut(ndims):
@@ -206,17 +237,26 @@ def filterFloodFilltemps(item):
 #     return tempList, len(tempList)
 
 
-if __name__ == '__main__':
-    startt = time.time()
-    templates2d, numOftemps2d, T, n = extractTemp(2)
-    # templates3d, numOftemps3d = floodFillShortcut(3)
-    thefile = open('test.txt', 'w')
-    for item in templates2d:
-        thefile.write("%s\n\n" % item)
-    thefile.close()
-    thetfile = open('test1.txt', 'w')
-    for item in T:
-        thetfile.write("%s\n\n" % item)
-    thetfile.close()
-    stop = time.time()
-    print("time taken is", (stop - startt))
+from functools import wraps
+
+def counter(func):
+    @wraps(func)
+    def tmp(*args, **kwargs):
+        tmp.count += 1
+        return func(*args, **kwargs)
+    tmp.count = 0
+    return tmp
+
+@counter
+def floodfill(matrix, x, y):
+    if matrix[x][y] == "1":
+        # recursively invoke flood fill on all surrounding cells:
+        if x > 0:
+            floodfill(matrix, x - 1, y)
+        if x < len(matrix[y]) - 1:
+            floodfill(matrix, x + 1, y)
+        if y > 0:
+            floodfill(matrix, x, y - 1)
+        if y < len(matrix) - 1:
+            floodfill(matrix, x, y + 1)
+    return matrix, floodfill.count
