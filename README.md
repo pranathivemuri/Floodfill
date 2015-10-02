@@ -1,11 +1,12 @@
 # Floodfill
-# writing code to find templates based on number of objects before and after removing a center pixel
-# using floodfill which turned out to be not a correct approach
 # look up getSkeletonbycountobjects.py for details and results
-# if equal then the pixel can be deleted and structuring element is a valid deletable template
+# if number of objects are equal before and after removing the pixel 
+# it can be deleted and structuring element is a valid deletable template
 # using python
 # need python > 3 to compile
-# uses scipy, numpy and itertools packages
+# uses scipy, numpy, skimage and itertools packages
 # 2D sanity check 
 # number of deleting templates is 24
+# skimage regionprops/ scipy label doesn't works for either 2D or 3D
+# find/ write a working model for counting objects. how do you floodfill 
 

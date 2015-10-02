@@ -2,8 +2,10 @@ import numpy as np
 import scipy
 import time
 from scipy import ndimage
+from skimage.measure import label, regionprops
 
 """
+
    considers number of 26 connected objects in the foreground and 6
    connected objects in the background should be equal
    before and after removal of border voxel (1) for
@@ -19,27 +21,34 @@ from scipy import ndimage
    smaller circles - removes everything (even if thickened)
 
 
-    refer to this link to understand why counting of objects is done 
+    refer to this link to understand why counting of objects is done
     repeatedly using diferent structuring elements
     https://books.google.com/books?id=4Yz3gLkISnwC&pg=PA97&lpg=PA97&dq=Three-dimensional+simple+points:
     +Serial+erosion,+parallel+thinning+and+skeletonization&source
     =bl&ots=tvkyIAxZTP&sig=4lF1FxRKKwLIC-oyl_ikX4iNPts&hl=en&sa=X&ved=0CDgQ6AEwBGoVChMIlOvh9uKIyAIVki-ICh39tQd6#v=onepage&q=
     Three-dimensional%20simple%20points%3A%20Serial%20erosion%2C%20parallel%20thinning%20and%20skeletonization&f=false
-    and to see how label works here http://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.measurements.label.html
-
+    and to see how count objects is working
+    http://scikit-image.org/docs/dev/auto_examples/plot_regionprops.html
 
 """
 
 
-def countObjects(inputImb, inputIma, se):
+def countObjects(inputImb, inputIma):
     """
+
     function to count number of objects
     in background and foreground
+
     """
-    lb, obefore = scipy.ndimage.measurements.label(inputImb)
-    lbc, ocbefore = scipy.ndimage.measurements.label(1 - inputImb)
-    la, oafter = scipy.ndimage.measurements.label(inputIma)
-    lac, ocafter = scipy.ndimage.measurements.label(1 - inputIma)
+
+    lb = label(inputImb)
+    obefore = len(regionprops(lb))
+    lbc = label(1 - inputImb, connectivity=1)
+    ocbefore = len(regionprops(lbc))
+    la = label(inputIma)
+    oafter = len(regionprops(la))
+    lac = label(1 - inputIma, connectivity=1)
+    ocafter = len(regionprops(lac))
 
     if obefore == oafter and ocbefore == ocafter:
         deletableTemp = 1
@@ -51,8 +60,10 @@ def countObjects(inputImb, inputIma, se):
 
 def setStructureTrueOrFalse(a):
     """
+
     decide if the 3 by 3 by 3 structure
     is deletable
+
     """
     inputIma = np.copy(a)
     inputImb = np.copy(a)
@@ -60,13 +71,11 @@ def setStructureTrueOrFalse(a):
     if ndims == 2:
         inputImb[1][1] = 1
         inputIma[1][1] = 0
-        sElement = np.ones((3, 3), dtype=np.uint8)
-        deletableTemp = countObjects(inputImb, inputIma, sElement)
+        deletableTemp = countObjects(inputImb, inputIma)
     else:
         inputImb[1][1][1] = 1
         inputIma[1][1][1] = 0
-        sElement = ndimage.generate_binary_structure(3, 3)
-        deletableTemp = countObjects(inputImb, inputIma, sElement)
+        deletableTemp = countObjects(inputImb, inputIma)
     return deletableTemp
 
 
@@ -83,7 +92,7 @@ def getBoundariesOfimage(image):
     return b
 
 
-def getPaddedimage(image):
+def getPadded3dimage(image):
     """
     pad the image on all its
     boundaries with zeros
@@ -92,6 +101,18 @@ def getPaddedimage(image):
     paddedShape = z + 2, m + 2, n + 2
     padImage = np.zeros((paddedShape), dtype=np.uint8)
     padImage[1:z + 1, 1:m + 1, 1:n + 1] = image
+    return padImage
+
+
+def getPadded2dimage(image):
+    """
+        pad the image on all its
+        boundaries with zeros
+        """
+    m, n = np.shape(image)
+    paddedShape = m + 2, n + 2
+    padImage = np.zeros((paddedShape), dtype=np.uint8)
+    padImage[1:m + 1, 1:n + 1] = image
     return padImage
 
 
@@ -122,7 +143,33 @@ def skeletonPass(image):
     return numpixel_removed, result
 
 
-def getSkeletonize(image, sElement):
+def skeletonPass2d(image):
+    """
+        comprises single pass of removing borer points/edges
+        """
+    m, n = np.shape(image)
+    paddedShape = m, n
+    temp_del = np.ones((paddedShape), dtype=np.uint8)
+    result = np.ones((paddedShape), dtype=np.uint8)
+    b = getBoundariesOfimage(image)
+    acopy = image.copy()
+    numpixel_removed = 0
+    for i in range(1, m - 1):
+        for j in range(1, n - 1):
+            if b[i, j] != 1:
+                continue
+            asub = acopy[i - 1: i + 2, j - 1: j + 2]
+            delOrNot = setStructureTrueOrFalse(asub)  # if edge pixel is 1
+            if delOrNot != 0:
+                temp_del[i, j] = 0
+                numpixel_removed += 1
+        acopy = np.multiply(acopy, temp_del)  # multiply the binary image with temp_del(image that marks edges as zeros)
+        acopy = np.uint8(acopy)
+    result[:] = acopy[:]
+    return numpixel_removed, result
+
+
+def getSkeletonize(image):
     """
     function to skeletonize a 2D or a 3D binary image with object in brighter contrast
     than background. In other words, 1 = object, 0 = background,iteratively
@@ -135,21 +182,32 @@ def getSkeletonize(image, sElement):
     assert image.max() == 1
     assert image.min() >= 0
     assert image.dtype == np.uint8
-    image = ndimage.binary_dilation(image, sElement)
+    # image = ndimage.binary_dilation(image, sElement)
     image = np.uint8(image)
-    z, m, n = np.shape(image)
-    padImage = getPaddedimage(image)
+    if np.ndim(image) == 3:
+        z, m, n = np.shape(image)
+        padImage = getPadded3dimage(image)
+    else:
+        m, n = np.shape(image)
+        padImage = getPadded2dimage(image)
     start_skeleton = time.time()
     pass_no = 0
     numpixel_removed = 0
     numpixel_removedList = []
     while pass_no == 0 or numpixel_removed > 0:
-        numpixel_removed, padImage = skeletonPass(padImage)
+        if np.ndim(image) == 3:
+            padImage = getPadded3dimage(image)
+            numpixel_removed, padImage = skeletonPass(padImage)
+        else:
+            numpixel_removed, padImage = skeletonPass2d(padImage)
         print("number of pixels removed in pass", pass_no, "is ", numpixel_removed)
         numpixel_removedList.append(numpixel_removed)
         pass_no += 1
     print("done %i number of pixels in %i seconds" % (np.sum(image), time.time() - start_skeleton))
-    return padImage[1:z + 1, 1:m + 1, 1:n + 1]
+    if np.ndim(padImage) == 3:
+        return padImage[1:z + 1, 1:m + 1, 1:n + 1]
+    else:
+        return padImage[1:m + 1, 1:n + 1]
 
 
 def getRing(ri, ro, size=(25, 25)):
@@ -188,12 +246,11 @@ def getDonut(width=2, size=(25, 25, 25)):
 
 if __name__ == '__main__':
 
-    sampleCube = getDonut(2, (6, 6, 6))
-    sElement = ndimage.generate_binary_structure(3, 3)
-    resultCube1 = getSkeletonize(sampleCube, sElement)
-    sElement = ndimage.generate_binary_structure(3, 1)
-    resultCube2 = getSkeletonize(sampleCube, sElement)
-    sElement = ndimage.generate_binary_structure(3, 2)
-    resultCube3 = getSkeletonize(sampleCube, sElement)
-    resultCube = np.logical_or(resultCube1, resultCube2)
-    rc = np.logical_or(resultCube, resultCube3)
+    sampleCube = getRing(0.1, 0.3)
+    # sElement = ndimage.generate_binary_structure(3, 3)
+    resultCube = getSkeletonize(sampleCube)
+    # sElement = ndimage.generate_binary_structure(3, 1)
+    # resultCube2 = getSkeletonize(sampleCube, sElement)
+    # sElement = ndimage.generate_binary_structure(3, 2)
+    # resultCube3 = getSkeletonize(sampleCube, sElement)
+    # resultCube = np.logical_or(resultCube1, resultCube2)
